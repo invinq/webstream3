@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit-Style Advanced Weapons Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <style>
+        * {
+            padding: 2px !important;
+        }
+        body:not(.dark).light {
+            color: #1c1c1d !important;
+        }
+        body:not(.dark).light select,
+        body:not(.dark).light p,
+        body:not(.dark).light div {
+            color: #1c1c1d !important;
+        }
+        body:not(.dark) select {
+            background-color: #e2e2e2 !important;
+        }
+        select {
+            border-width: 1px !important;
+        }
+        body.dark {
+            color: #e2e2e2 !important;
+        }
+        body.dark select,
+        body.dark p,
+        body.dark div {
+            color: #e2e2e2 !important;
+        }
+        .container {
+            padding: 2px !important;
+        }
+        #keyword-filter, #time-filter {
+            padding: 4px 2px !important; /* py-1 px-2 */
+        }
+        #sign-in-button {
+            padding: 2px 2px !important; /* px-2 py-2 */
+        }
+        #scroll-left, #scroll-right {
+            padding: 2px 2px !important; /* py-0.5 px-2 */
+        }
+        #tab-bar {
+            scroll-behavior: smooth;
+            transition: scroll-left 0.3s;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans transition-colors duration-300 light !text-gray-900">
+    <div class="container mx-auto max-w-4xl relative">
+        <div class="mb-6">
+            <img id="logo" src="https://yufutdymwoiswkszlvtt.supabase.co/storage/v1/object/sign/images/logos/ii%20-%20Logo_Name_B.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9mNTljZGE3My01YTUyLTRjMzgtOTliOS1kZjRhNTBkNTIxMjIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWFnZXMvbG9nb3MvaWkgLSBMb2dvX05hbWVfQi5wbmciLCJpYXQiOjE3NTE0OTM4MDcsImV4cCI6MTc4MzAyOTgwN30._rB7rdsclju9Izmirw2-TQMXLLZQgkRxhpcEy1VGDdM" alt="Logo" class="max-w-[115px] h-auto object-contain">
+            <p class="text-[15px] font-bold !text-gray-900 dark:text-gray-200 mt-1">Investigation Feed</p>
+        </div>
+        <div class="absolute top-4 right-4">
+            <button id="sign-in-button" class="bg-blue-500 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700" onclick="handleAuthClick()">Sign in with Google</button>
+        </div>
+        <div class="flex items-center space-x-2 mb-4">
+            <select id="keyword-filter" class="py-1 px-2 leading-tight border !border-1 border-gray-600 rounded !bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-200" onchange="fetchSheetData(activeSheetName)">
+                <option value="all" selected>By Keyword</option>
+            </select>
+            <select id="time-filter" class="py-1 px-2 leading-tight border !border-1 border-gray-600 rounded !bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-200" onchange="fetchSheetData(activeSheetName)">
+                <option value="24hours">Last 24 Hours</option>
+                <option value="3days">Last 3 Days</option>
+                <option value="week">Last Week</option>
+                <option value="month">Last Month</option>
+                <option value="all" selected>By Date</option>
+            </select>
+            <button id="theme-toggle" class="bg-gray-200 hover:bg-gray-300 rounded dark:bg-gray-700 dark:hover:bg-gray-600" onclick="toggleDarkMode()" title="Toggle Dark/Light Mode">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600 dark:text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            </button>
+        </div>
+        <div class="flex items-center mb-4">
+            <button id="scroll-left" class="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-l dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200" onclick="scrollTabs(-1)"><</button>
+            <div id="tab-bar" class="flex overflow-x-hidden whitespace-nowrap border-b border-gray-200 flex-1 dark:border-gray-600 gap-2 bg-gray-600 dark:bg-gray-700"></div>
+            <button id="scroll-right" class="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-r dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200" onclick="scrollTabs(1)">></button>
+        </div>
+        <div id="posts" class="space-y-4 !text-gray-900 dark:text-gray-200"></div>
+    </div>
+
+    <script>
+        const CLIENT_ID = '837335636723-68ne8qrupe4d9bf2n8c3bsl8sctp1k61.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyAzxnmPJzDCxQhoAoMAx9NusDVHXurLMRQ';
+        const SPREADSHEET_ID = '1sG6wPxM3Z30IOngLKQQ7BSEy7il8apqSh0a1rL2jsFs';
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+
+        let gapiLoaded = false;
+        let tokenClient;
+        let sheetNames = [];
+        let activeSheetName = 'Advanced Weapons'; // Default sheet
+        let darkMode = false;
+
+        // Toggle dark/light mode
+        function toggleDarkMode() {
+            console.log('Toggling dark mode, current state:', darkMode);
+            darkMode = !darkMode;
+            const body = document.body;
+            const logo = document.getElementById('logo');
+            const signInButton = document.getElementById('sign-in-button');
+            const keywordFilter = document.getElementById('keyword-filter');
+            const timeFilter = document.getElementById('time-filter');
+            const posts = document.getElementById('posts');
+            const tabBar = document.getElementById('tab-bar');
+            const scrollLeft = document.getElementById('scroll-left');
+            const scrollRight = document.getElementById('scroll-right');
+            const themeToggle = document.getElementById('theme-toggle');
+
+            if (darkMode) {
+                console.log('Switching to dark mode');
+                body.classList.remove('bg-gray-100', 'light', '!text-gray-900');
+                body.classList.add('dark');
+                body.style.backgroundColor = '#1c1c1c';
+                body.style.color = '#e2e2e2';
+                logo.src = 'https://yufutdymwoiswkszlvtt.supabase.co/storage/v1/object/sign/images/logos/ii%20-%20Logo_Name_W.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9mNTljZGE3My01YTUyLTRjMzgtOTliOS1kZjRhNTBkNTIxMjIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWFnZXMvbG9nb3MvaWkgLSBMb2dvX05hbWVfVy5wbmciLCJpYXQiOjE3NTE0OTM4MjAsImV4cCI6MTc4MzAyOTgyMH0.hbMC5nWLeA_d1QLCw0EBJ3Q4n5LfLu52mNBqRSRTSF0';
+                signInButton.classList.remove('hover:bg-blue-600');
+                signInButton.classList.add('hover:bg-blue-700');
+                keywordFilter.classList.remove('!bg-gray-100', 'text-gray-400');
+                keywordFilter.classList.add('bg-gray-800', 'text-gray-200');
+                keywordFilter.style.backgroundColor = '#1f2937';
+                timeFilter.classList.remove('!bg-gray-100', 'text-gray-400');
+                timeFilter.classList.add('bg-gray-800', 'text-gray-200');
+                timeFilter.style.backgroundColor = '#1f2937';
+                posts.classList.remove('!text-gray-900');
+                posts.classList.add('text-gray-200');
+                posts.style.color = '#e2e2e2';
+                tabBar.classList.remove('border-gray-200');
+                tabBar.classList.add('border-gray-600');
+                scrollLeft.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+                scrollLeft.classList.add('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+                scrollRight.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+                scrollRight.classList.add('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+                themeToggle.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+                themeToggle.classList.add('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+            } else {
+                console.log('Switching to light mode');
+                body.classList.remove('dark');
+                body.classList.add('bg-gray-100', 'light', '!text-gray-900');
+                body.style.backgroundColor = '#e2e2e2';
+                body.style.color = '#1c1c1d';
+                logo.src = 'https://yufutdymwoiswkszlvtt.supabase.co/storage/v1/object/sign/images/logos/ii%20-%20Logo_Name_B.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9mNTljZGE3My01YTUyLTRjMzgtOTliOS1kZjRhNTBkNTIxMjIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWFnZXMvbG9nb3MvaWkgLSBMb2dvX05hbWVfQi5wbmciLCJpYXQiOjE3NTE0OTM4MDcsImV4cCI6MTc4MzAyOTgwN30._rB7rdsclju9Izmirw2-TQMXLLZQgkRxhpcEy1VGDdM';
+                signInButton.classList.remove('hover:bg-blue-700');
+                signInButton.classList.add('hover:bg-blue-600');
+                keywordFilter.classList.remove('bg-gray-800', 'text-gray-200');
+                keywordFilter.classList.add('!bg-gray-100', 'text-gray-400');
+                keywordFilter.style.backgroundColor = '#e2e2e2';
+                timeFilter.classList.remove('bg-gray-800', 'text-gray-200');
+                timeFilter.classList.add('!bg-gray-100', 'text-gray-400');
+                timeFilter.style.backgroundColor = '#e2e2e2';
+                posts.classList.remove('text-gray-200');
+                posts.classList.add('!text-gray-900');
+                posts.style.color = '#1c1c1d';
+                tabBar.classList.remove('border-gray-600');
+                tabBar.classList.add('border-gray-200');
+                scrollLeft.classList.remove('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+                scrollLeft.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+                scrollRight.classList.remove('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+                scrollRight.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+                themeToggle.classList.remove('bg-gray-700', 'hover:bg-gray-600', 'text-gray-200');
+                themeToggle.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-600');
+            }
+            fetchSheetData(activeSheetName); // Refresh posts to apply color changes
+            console.log('Dark mode state after toggle:', darkMode);
+        }
+
+        // Scroll tab bar left or right
+        function scrollTabs(direction) {
+            const tabBar = document.getElementById('tab-bar');
+            const delta = direction * (window.innerWidth / 2);
+            tabBar.scrollBy({ left: delta, behavior: 'smooth' });
+        }
+
+        // Load Google API Client
+        function loadGapi() {
+            gapi.load('client', async () => {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+                });
+                gapiLoaded = true;
+                getSheetNames();
+            });
+        }
+
+        // Fetch all sheet names
+        async function getSheetNames() {
+            if (!gapiLoaded) {
+                console.error('Google API client not loaded');
+                return;
+            }
+            try {
+                const response = await gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                });
+                sheetNames = response.result.sheets.map(sheet => sheet.properties.title);
+                fetchSheetData(activeSheetName);
+            } catch (error) {
+                console.error('Error fetching sheet names:', error);
+                document.getElementById('posts').innerHTML = `
+                    <p class="text-red-500">Error loading sheet names: ${error.message}</p>
+                    <p class="!text-gray-900 dark:text-gray-200">Please ensure you are signed in and the spreadsheet is accessible.</p>
+                `;
+            }
+        }
+
+        // Handle Google Sign-In
+        function handleAuthClick() {
+            tokenClient.requestAccessToken();
+        }
+
+        // Initialize Google Identity Services
+        function initializeGis() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (response) => {
+                    if (response.access_token) {
+                        gapi.client.setToken({ access_token: response.access_token });
+                        document.getElementById('sign-in-button').style.display = 'none';
+                        getSheetNames();
+                    } else {
+                        console.error('Authentication failed');
+                    }
+                },
+            });
+        }
+
+        // Function to fetch Google Sheet data for a specific sheet
+        async function fetchSheetData(sheetName) {
+            if (!gapiLoaded) {
+                console.error('Google API client not loaded');
+                return;
+            }
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: sheetName,
+                });
+                const rows = response.result.values;
+                if (!rows || rows.length === 0) {
+                    throw new Error('No data found in the sheet.');
+                }
+                const headers = rows[0];
+                let posts = rows.slice(1).map(row => {
+                    let post = {};
+                    headers.forEach((header, index) => {
+                        post[header] = row[index] || '';
+                    });
+                    return post;
+                });
+
+                // Remove duplicates by URL (keep first occurrence)
+                const seenUrls = new Set();
+                posts = posts.filter(post => {
+                    if (post.url && !seenUrls.has(post.url)) {
+                        seenUrls.add(post.url);
+                        return true;
+                    }
+                    return false;
+                });
+
+                // Collect unique keywords
+                const keywords = [...new Set(posts.map(post => post.keyword).filter(keyword => keyword))].sort();
+                const keywordFilter = document.getElementById('keyword-filter');
+                const currentKeyword = keywordFilter.value;
+
+                // Filter by time range
+                const filterValue = document.getElementById('time-filter').value;
+                const now = new Date('2025-07-02T19:04:00-04:00'); // Today's date: July 2, 2025, 7:04 PM EDT
+                let cutoffDate;
+                if (filterValue === '24hours') {
+                    cutoffDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
+                } else if (filterValue === '3days') {
+                    cutoffDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000); // 3 days ago
+                } else if (filterValue === 'week') {
+                    cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
+                } else if (filterValue === 'month') {
+                    cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 1 month ago
+                } else {
+                    cutoffDate = null; // All
+                }
+
+                if (cutoffDate) {
+                    posts = posts.filter(post => {
+                        const pubDate = post.publishedAt ? new Date(post.publishedAt) : null;
+                        return pubDate && !isNaN(pubDate) && pubDate >= cutoffDate;
+                    });
+                }
+
+                // Filter by keyword
+                if (currentKeyword !== 'all') {
+                    posts = posts.filter(post => post.keyword === currentKeyword);
+                }
+
+                // Sort posts by publishedAt (newest first)
+                posts.sort((a, b) => {
+                    const dateA = a.publishedAt ? new Date(a.publishedAt) : new Date(0);
+                    const dateB = b.publishedAt ? new Date(b.publishedAt) : new Date(0);
+                    return dateB - dateA; // Descending order
+                });
+
+                renderPosts(posts, headers, sheetName, keywords);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('posts').innerHTML = `
+                    <p class="text-red-500">Error loading data: ${error.message}</p>
+                    <p class="!text-gray-900 dark:text-gray-200">Please ensure you are signed in and the spreadsheet is accessible.</p>
+                `;
+            }
+        }
+
+        // Function to update 'select' field
+        async function updateSelectField(url, buttonElement, sheetName) {
+            if (!gapi.client.getToken()) {
+                alert('Please sign in to update the sheet.');
+                return;
+            }
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: sheetName,
+                });
+                const rows = response.result.values;
+                const headers = rows[0];
+                const urlIndex = headers.indexOf('url');
+                const selectIndex = headers.indexOf('select');
+                let rowIndex = -1;
+
+                for (let i = 1; i < rows.length; i++) {
+                    if (rows[i][urlIndex] === url) {
+                        rowIndex = i + 1; // 1-based index for Sheets API
+                        break;
+                    }
+                }
+
+                if (rowIndex === -1) {
+                    throw new Error('URL not found in sheet.');
+                }
+
+                await gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: `${sheetName}!A${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    resource: {
+                        values: [['1']],
+                    },
+                });
+
+                buttonElement.classList.remove('text-black', 'hover:text-gray-700', 'dark:text-gray-400', 'dark:hover:text-gray-400');
+                buttonElement.classList.add('text-yellow-400');
+                fetchSheetData(sheetName); // Refresh posts for the current sheet
+                alert('Select field updated successfully!');
+            } catch (error) {
+                console.error('Error updating sheet:', error);
+                alert(`Error updating sheet: ${error.message}`);
+            }
+        }
+
+        // Function to update 'class' field
+        async function updateClassField(url, buttonElement, sheetName) {
+            if (!gapi.client.getToken()) {
+                alert('Please sign in to update the sheet.');
+                return;
+            }
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: sheetName,
+                });
+                const rows = response.result.values;
+                const headers = rows[0];
+                const urlIndex = headers.indexOf('url');
+                const classIndex = headers.indexOf('class');
+                let rowIndex = -1;
+
+                for (let i = 1; i < rows.length; i++) {
+                    if (rows[i][urlIndex] === url) {
+                        rowIndex = i + 1; // 1-based index for Sheets API
+                        break;
+                    }
+                }
+
+                if (rowIndex === -1) {
+                    throw new Error('URL not found in sheet.');
+                }
+
+                await gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: `${sheetName}!B${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    resource: {
+                        values: [['1']],
+                    },
+                });
+
+                buttonElement.classList.remove('text-black', 'hover:text-gray-700', 'dark:text-gray-400', 'dark:hover:text-gray-400');
+                buttonElement.classList.add('text-yellow-400');
+                fetchSheetData(sheetName); // Refresh posts for the current sheet
+                alert('Class field updated successfully!');
+            } catch (error) {
+                console.error('Error updating sheet:', error);
+                alert(`Error updating sheet: ${error.message}`);
+            }
+        }
+
+        // Function to mark post as visited
+        function markAsVisited(postElement) {
+            postElement.classList.add('filter', 'grayscale');
+        }
+
+        // Function to render posts and tab bar
+        function renderPosts(posts, headers, sheetName, keywords) {
+            activeSheetName = sheetName; // Update active sheet
+            const tabBar = document.getElementById('tab-bar');
+            tabBar.innerHTML = '';
+            sheetNames.forEach(name => {
+                const tab = document.createElement('button');
+                tab.className = `py-1 px-3 leading-tight text-sm font-medium ${name === sheetName ? 'bg-blue-100 text-gray-900 border-b-2 border-blue-500 dark:bg-blue-600 dark:text-white dark:border-blue-400' : 'bg-gray-600 text-gray-900 hover:bg-gray-300 dark:text-gray-200 dark:hover:bg-gray-700'}`;
+                tab.textContent = name;
+                tab.onclick = () => fetchSheetData(name);
+                tabBar.appendChild(tab);
+            });
+
+            // Populate keyword filter dropdown
+            const keywordFilter = document.getElementById('keyword-filter');
+            const currentKeyword = keywordFilter.value;
+            keywordFilter.innerHTML = '<option value="all" selected>By Keyword</option>';
+            keywords.forEach(keyword => {
+                const option = document.createElement('option');
+                option.value = keyword;
+                option.textContent = keyword;
+                if (keyword === currentKeyword) {
+                    option.selected = true;
+                }
+                keywordFilter.appendChild(option);
+            });
+
+            const postsContainer = document.getElementById('posts');
+            postsContainer.innerHTML = '';
+            posts.forEach((post, index) => {
+                const postElement = document.createElement('div');
+                postElement.className = 'relative pt-[5px]';
+                const selectActive = post.select === '1';
+                const classActive = post.class === '1';
+                postElement.innerHTML = `
+                    <a href="${post.url || '#'}" target="_blank" class="text-base font-semibold text-blue-600 hover:underline visited:grayscale dark:text-blue-400" onclick="markAsVisited(this.parentElement)">${post.title || 'No Title'}</a>
+                    <p class="!text-gray-900 dark:text-gray-200">${post.description || 'No Description'}</p>
+                    ${post.urlToImage ? `<img src="${post.urlToImage}" alt="Article Image" class="w-full h-48 object-cover rounded" onerror="this.style.display='none'">` : ''}
+                    <div class="flex space-x-4 text-sm !text-gray-900 dark:text-gray-300">
+                        <span>Published: <span class="font-bold">${post.publishedAt ? post.publishedAt.split('T')[0] : 'N/A'}</span></span>
+                        <span>Topic: <span class="font-bold">${post.topic || 'N/A'}</span></span>
+                        <span>Keyword: <span class="font-bold">${post.keyword || 'N/A'}</span></span>
+                    </div>
+                    <button class="absolute bottom-0 right-12 ${classActive ? 'text-yellow-400' : 'text-black hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-400'} focus:outline-none" title="Upvote" onclick="updateClassField('${post.url}', this, '${sheetName}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                        </svg>
+                    </button>
+                    <button class="absolute bottom-0 right-4 ${selectActive ? 'text-yellow-400' : 'text-black hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-400'} focus:outline-none" title="Favorite" onclick="updateSelectField('${post.url}', this, '${sheetName}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.15c.969 0 1.371 1.24.588 1.81l-3.357 2.428a1 1 0 00-.364 1.118l1.286 3.97c.3 .921-.755 1.688-1.54 1.118l-3.357-2.428a1 1 0 00-1.176 0l-3.357 2.428c-.784.57-1.838-.197-1.54-1.118l1.286-3.97a1 1 0 00-.364-1.118L2.663 7.397c-.783-.57-.38-1.81.588-1.81h4.15a1 1 0 00.95-.69l1.286-3.97z" />
+                        </svg>
+                    </button>
+                    ${index < posts.length - 1 ? '<hr class="w-1/3 mx-auto border-t border-gray-300 dark:border-gray-600 mt-1.5" />' : ''}
+                `;
+                postsContainer.appendChild(postElement);
+            });
+        }
+
+        // Load Google Identity Services and API Client
+        function initialize() {
+            const gisScript = document.createElement('script');
+            gisScript.src = 'https://accounts.google.com/gsi/client';
+            gisScript.async = true;
+            gisScript.onload = initializeGis;
+            document.body.appendChild(gisScript);
+            loadGapi();
+        }
+
+        // Start initialization
+        initialize();
+    </script>
+</body>
+</html>
