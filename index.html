@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invisible Inquiry</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .dropdowns {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        select {
+            padding: 5px;
+            font-size: 14px;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+        }
+        .posts {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .post {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .post img {
+            max-width: 100px;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="dropdowns">
+        <select id="timeFilter">
+            <option value="all">All</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="3d">Last 3 Days</option>
+            <option value="1w">Last Week</option>
+            <option value="1m">Last Month</option>
+        </select>
+        <select id="keywordFilter">
+            <option value="all">All Keywords</option>
+            <!-- Populated dynamically -->
+        </select>
+    </div>
+    <div class="content">
+        <div class="posts" id="postsContainer"></div>
+    </div>
+    <div class="navigation">
+        <button>◄</button>
+        <button>▶</button>
+    </div>
+
+    <script src="https://unpkg.com/pg@8.11.3/dist/pg.min.js"></script>
+    <script>
+        // Neon PostgreSQL connection
+        const connectionString = 'postgresql://neondb_owner:npg_MTHdOn4e6BPj@ep-icy-field-a8g1frwz-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require';
+        const client = new window.pg.Client(connectionString);
+
+        let articles = [];
+
+        // Fetch unique keywords
+        async function getUniqueKeywords() {
+            try {
+                const result = await client.query('SELECT DISTINCT keyword FROM articlemetadata WHERE keyword IS NOT NULL ORDER BY keyword');
+                return result.rows.map(row => row.keyword);
+            } catch (error) {
+                console.error('Error fetching keywords:', error);
+                return [];
+            }
+        }
+
+        // Populate keyword dropdown
+        async function populateKeywordDropdown() {
+            const keywordSelect = document.getElementById('keywordFilter');
+            const keywords = await getUniqueKeywords();
+            keywords.forEach(keyword => {
+                const option = document.createElement('option');
+                option.value = keyword;
+                option.textContent = keyword;
+                keywordSelect.appendChild(option);
+            });
+        }
+
+        // Fetch and filter articles
+        async function filterArticles() {
+            const timeFilter = document.getElementById('timeFilter').value;
+            const keywordFilter = document.getElementById('keywordFilter').value;
+            const now = new Date();
+            let query = 'SELECT * FROM articlemetadata';
+            let conditions = [];
+            let params = [];
+
+            // Time filtering
+            if (timeFilter !== 'all') {
+                const timeRanges = {
+                    '24h': '1 day',
+                    '3d': '3 days',
+                    '1w': '7 days',
+                    '1m': '30 days'
+                };
+                conditions.push(`publisheddate >= NOW() - INTERVAL $1`);
+                params.push(timeRanges[timeFilter]);
+            }
+
+            // Keyword filtering
+            if (keywordFilter !== 'all') {
+                conditions.push(`keyword = $${params.length + 1}`);
+                params.push(keywordFilter);
+            }
+
+            // Build query
+            if (conditions.length > 0) {
+                query += ' WHERE ' + conditions.join(' AND ');
+            }
+            query += ' ORDER BY publisheddate DESC';
+
+            try {
+                const result = await client.query(query, params);
+                articles = result.rows;
+                displayArticles();
+            } catch (error) {
+                console.error('Error fetching articles:', error);
+            }
+        }
+
+        // Display articles
+        function displayArticles() {
+            const container = document.getElementById('postsContainer');
+            container.innerHTML = '';
+            articles.forEach(article => {
+                const articleElement = document.createElement('div');
+                articleElement.className = 'post';
+                articleElement.innerHTML = `
+                    <h3><a href="${article.url}" target="_blank">${article.title}</a></h3>
+                    ${article.imageurl ? `<img src="${article.imageurl}" alt="${article.title}">` : ''}
+                    <p>${article.snippet}</p>
+                    <small>Topic: ${article.topic || 'N/A'} | Keyword: ${article.keyword || 'N/A'} | Date: ${new Date(article.publisheddate).toLocaleString()}</small>
+                `;
+                container.appendChild(articleElement);
+            });
+        }
+
+        // Initialize
+        async function init() {
+            try {
+                await client.connect();
+                await populateKeywordDropdown();
+                await filterArticles();
+            } catch (error) {
+                console.error('Initialization error:', error);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('timeFilter').addEventListener('change', filterArticles);
+        document.getElementById('keywordFilter').addEventListener('change', filterArticles);
+        document.querySelectorAll('.navigation button')[0].addEventListener('click', () => alert('Previous page not implemented'));
+        document.querySelectorAll('.navigation button')[1].addEventListener('click', () => alert('Next page not implemented'));
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
